@@ -1,19 +1,55 @@
-# vnquant — Institutional-Grade Quant Research Engine for the Vietnam Equity Market
+<h1 align="center">vnquant</h1>
 
-> **Showcase / portfolio edition.** This repository demonstrates the *engineering
+<p align="center">
+  <b>An institutional-grade quantitative research engine for the Vietnam equity market —<br>
+  alpha research, factor risk modelling, smart execution, and a grounded RAG assistant,<br>
+  wired into one reproducible pipeline.</b>
+</p>
+
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-blue.svg">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-33%20passing-brightgreen.svg">
+  <img alt="Lint" src="https://img.shields.io/badge/ruff-clean-success.svg">
+  <img alt="Type" src="https://img.shields.io/badge/typed-dataclasses-informational.svg">
+  <img alt="Status" src="https://img.shields.io/badge/data-synthetic%20%C2%B7%20reproducible-orange.svg">
+</p>
+
+> **Portfolio / showcase edition.** This repository demonstrates the *engineering
 > architecture* of a full quantitative trading research stack. It runs entirely on
-> **synthetic data** with **textbook example factors**. No proprietary alphas, calibrated
+> **synthetic data** with **textbook example factors** — no proprietary alphas, calibrated
 > parameters, trained model weights, broker credentials, or live track records are
-> included. See [LICENSE](LICENSE).
+> included. Shipping synthetic data is a deliberate choice: the value on display is the
+> **machinery, the statistical discipline, and the guardrails**, not a money-making
+> strategy. See [LICENSE](LICENSE).
 
 `vnquant` is a compact, end-to-end quant research engine modelled on how an institutional
 desk separates concerns: rigorous alpha research with multiple-testing correction, a
 structural factor risk model, risk-based portfolio construction, a smart order router,
-double-entry trade accounting, a data-leakage audit framework, and an event-driven
-backtester — wired together into one reproducible pipeline.
+double-entry trade accounting, a data-leakage audit framework, an event-driven
+backtester, and a **retrieval-augmented research assistant** — wired together into one
+reproducible pipeline.
 
 It targets the **Vietnam equity market** specifically: the ±7% HOSE daily price band,
 100-share lot rounding, and thin-liquidity execution are first-class concerns throughout.
+
+---
+
+## Highlights
+
+- 🧪 **Statistical discipline first.** Benjamini-Hochberg FDR + the Deflated Sharpe Ratio
+  correct for data-snooping when many factors are tested — the single most important habit
+  separating real quant research from curve-fitting.
+- 📉 **Structural factor risk model** `Σ = B·F·Bᵀ + D` with **Ledoit-Wolf shrinkage** for
+  small-sample robustness, feeding volatility-targeted portfolio construction.
+- 🛡️ **Data-leakage audit framework** encoding real production war stories: look-ahead,
+  survivorship, feature-completeness, and model-collapse checkers.
+- 🤖 **Grounded RAG assistant** over the engine's own run-facts, with a two-gate
+  **hallucination guard** that *abstains* when context is insufficient — offline by
+  default, OpenAI-pluggable.
+- 🇻🇳 **Vietnam microstructure-aware** execution: ±7% HOSE band, 100-share lots, and a
+  square-root market-impact model in a thin market.
+- 🔁 **Fully reproducible & tested.** Seeded RNG end-to-end, **33 passing tests**, clean
+  `ruff`, double-entry books that provably balance after every run.
 
 ---
 
@@ -23,8 +59,9 @@ Most personal "trading bot" projects are a single indicator wrapped in a loop. T
 part of real quant work isn't the signal — it's the **discipline** that stops you from
 fooling yourself: correcting for data-snooping when you test many factors, building a
 covariance matrix that doesn't blow up on small samples, accounting for every cent so
-balance drift can't hide, and auditing your data so a silent leak doesn't inflate your
-backtest.
+balance drift can't hide, auditing your data so a silent leak doesn't inflate your
+backtest, and — when you bolt an LLM on top — refusing to answer when the retrieved
+context doesn't support it.
 
 This repo shows that machinery, built correctly, on safe synthetic data.
 
@@ -80,6 +117,30 @@ model on a trailing window at each rebalance, constructs target weights, and rou
 implied trades through the ledger with commission and slippage. Event-driven execution
 makes look-ahead structurally hard — the engine can only ever see data up to the current bar.
 
+### Research assistant — RAG (`vnquant/assistant`)
+A **retrieval-augmented generation** layer that answers natural-language questions about
+the engine — *grounded* on its own methodology notes and the **live facts of a pipeline
+run** (which factors passed FDR, per-factor IC/p-values, Ledoit-Wolf shrinkage, audit
+severity, backtest summary) rather than on a model's parametric memory. The full RAG
+machinery is here: word-window **chunking** with overlap, an **embedder** (offline
+deterministic hashing embedder, or OpenAI embeddings), a cosine **vector store** +
+top-k **retriever**, and a **grounded generator** (offline extractive, or an OpenAI chat
+model under a strict "answer only from context" prompt).
+
+The centerpiece is the **hallucination guard**: before generating, the assistant applies
+two gates — a semantic cosine floor *and* a lexical content-term overlap with the query —
+and **abstains** ("I don't have enough grounded context") when either fails. This is the
+generation-edge twin of the audit framework: both exist to stop the system from fooling
+its user. It runs **fully offline by default** (no API key), and swaps to a real LLM
+backend with one config flag.
+
+```bash
+# grounded on a live pipeline run, fully offline:
+vnquant ask "How many factors passed FDR and what was the audit severity?"
+vnquant ask "Why use the Deflated Sharpe Ratio?" --no-ground   # methodology only
+vnquant ask "..." --backend openai                             # real embeddings + LLM
+```
+
 ---
 
 ## Installation and CLI
@@ -93,6 +154,9 @@ cd vn-quant-engine
 # with uv (recommended)
 uv venv --python 3.12 .venv
 uv pip install -e ".[dev]"
+
+# optional: real LLM backend for the research assistant (OpenAI)
+uv pip install -e ".[dev,llm]"
 
 # or with pip
 python -m venv .venv && source .venv/bin/activate
@@ -110,6 +174,7 @@ vnquant research      # alpha research loop: IC / FDR / Deflated-Sharpe table
 vnquant backtest      # event-driven backtest performance summary
 vnquant audit         # run the data-leakage audit checks
 vnquant pipeline      # full end-to-end run (data → audit → alpha → risk → backtest)
+vnquant ask "..."     # RAG research assistant, grounded on a live run (abstains if unsure)
 
 # reproducibility: every command takes a seed
 vnquant research --seed 7
@@ -182,6 +247,7 @@ vn-quant-engine/
 │   ├── execution/       # smart order router, double-entry ledger
 │   ├── audit/           # leakage / look-ahead / survivorship / collapse checkers
 │   ├── backtest/        # event-driven simulator
+│   ├── assistant/       # RAG: chunking, embeddings, vector store, grounded generator
 │   ├── pipeline.py      # end-to-end orchestrator
 │   └── default_config.py
 ├── cli/                 # typer + rich command-line interface
@@ -201,7 +267,7 @@ estimates, and backtest curves. The test suite asserts the double-entry ledger b
 after a full pipeline run.
 
 ```bash
-pytest -q          # 22 tests
+pytest -q          # 33 tests
 ```
 
 ---
@@ -227,6 +293,32 @@ worth telling in an interview:
 - **Multiple-testing is not optional.** Mining many factors and reporting the best one's
   Sharpe is the classic overfitting trap. BH-FDR + Deflated Sharpe are cheap insurance. →
   `alpha.multiple_testing`.
+- **An LLM that always answers will eventually lie.** Bolting RAG onto a quant engine is
+  easy; making it *refuse* when retrieval is weak is the hard, important part. The
+  assistant gates generation on both a semantic score and a lexical-overlap check, and
+  abstains otherwise — the generation-edge twin of the data audit. → `assistant.rag`.
+
+---
+
+## Skills demonstrated
+
+A quick map from this codebase to what an **AI / ML Engineer** role in banking and
+financial services typically looks for:
+
+| Area | What's in the repo | Where |
+|------|--------------------|-------|
+| **Applied ML / statistics** | Spearman IC, ICIR, t-stats; Benjamini-Hochberg FDR; Deflated Sharpe Ratio; cross-sectional OLS neutralization | `vnquant/alpha` |
+| **Risk modelling** | Structural factor covariance `Σ = B·F·Bᵀ + D`, Ledoit-Wolf shrinkage, PSD guarantees | `vnquant/risk` |
+| **GenAI / RAG** | Chunking, embeddings, vector store, retrieval, grounded generation, **hallucination guard with abstention** | `vnquant/assistant` |
+| **MLOps / data quality** | Leakage / look-ahead / survivorship / feature-completeness / model-collapse auditing | `vnquant/audit` |
+| **Software engineering** | Typed dataclasses, clean package boundaries, dependency injection (pluggable backends), Typer CLI, 33 pytest tests, clean `ruff` | repo-wide |
+| **Domain knowledge** | Vietnam market microstructure, transaction-cost & market-impact modelling, double-entry accounting invariants | `vnquant/execution` |
+| **Reproducibility** | Seeded RNG everywhere; identical IC tables, risk estimates, and equity curves across runs | `--seed` flag |
+
+> **A note for reviewers:** this is a clean-room showcase derived from a larger private
+> trading system. The architecture, statistical methods, audit checkers, and the RAG
+> assistant are real engineering; the data and factors are deliberately synthetic and
+> public so nothing proprietary is exposed.
 
 ---
 
