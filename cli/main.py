@@ -6,6 +6,7 @@ Commands
     vnquant backtest    Run the event-driven backtest and print performance summary.
     vnquant audit       Run the data-leakage audit checks on synthetic data.
     vnquant pipeline    Run the full end-to-end pipeline.
+    vnquant ask         Ask the RAG research assistant a grounded question.
 """
 
 from __future__ import annotations
@@ -110,6 +111,42 @@ def _cfg(seed: int) -> Config:
     cfg = Config()
     cfg.data.seed = seed
     return cfg
+
+
+@app.command()
+def ask(
+    question: str = typer.Argument(..., help="Question for the research assistant"),
+    seed: int = typer.Option(42, help="RNG seed for the pipeline run to ground answers on"),
+    backend: str = typer.Option("offline", help="RAG backend: 'offline' or 'openai'"),
+    ground: bool = typer.Option(
+        True, help="Run the pipeline first so answers are grounded on live run facts"
+    ),
+):
+    """Ask the retrieval-augmented research assistant a grounded question.
+
+    Indexes the engine's methodology notes plus (optionally) live pipeline run-facts, then
+    retrieves and answers ONLY from that context — abstaining when support is too weak.
+    """
+    from vnquant.assistant import build_assistant  # noqa: PLC0415
+
+    _banner()
+    cfg = _cfg(seed)
+    cfg.assistant.backend = backend
+    out = run_pipeline(cfg) if ground else None
+    assistant = build_assistant(out, cfg.assistant)
+    answer = assistant.ask(question)
+
+    body = answer.text
+    if answer.sources and not answer.abstained:
+        body += "\n\n[dim]sources: " + ", ".join(answer.sources) + "[/dim]"
+    border = "yellow" if answer.abstained else "green"
+    console.print(
+        Panel(
+            body,
+            title=f"vnquant assistant · {backend} · {assistant.n_chunks} chunks indexed",
+            border_style=border,
+        )
+    )
 
 
 if __name__ == "__main__":
