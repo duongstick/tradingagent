@@ -67,6 +67,70 @@ This repo shows that machinery, built correctly, on safe synthetic data.
 
 ---
 
+## Architecture at a glance
+
+The pipeline is a one-directional flow of well-typed artifacts. Each stage is an
+independent subpackage with a narrow interface, so any piece can be tested, swapped, or
+read in isolation. The audit framework sits *across* the data path (fail-fast on leakage),
+and the RAG assistant reads the run's own outputs to answer questions — grounded, never
+guessing.
+
+```
+                         ┌──────────────────────────────────────────────┐
+                         │              vnquant pipeline                  │
+                         └──────────────────────────────────────────────┘
+
+   ┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌──────────────────┐
+   │  Data layer │     │   Alpha     │     │  Risk model  │     │   Portfolio      │
+   │  synthetic  │────▶│  research   │────▶│  Σ=BFBᵀ+D    │────▶│  construction    │
+   │  OHLCV panel│     │  IC · FDR · │     │  Ledoit-Wolf │     │  vol-target,caps │
+   │  HOSE ±7%   │     │  Deflated SR│     │  shrinkage   │     │                  │
+   └──────┬──────┘     └──────┬──────┘     └──────────────┘     └────────┬─────────┘
+          │                   │                                          │
+          │                   │                                          ▼
+          │                   │                            ┌──────────────────────────┐
+          │                   │                            │   Execution              │
+          │                   │                            │   Smart Order Router      │
+          │                   │                            │   TWAP/VWAP/POV ·         │
+          │                   │                            │   √-impact · 100-lot      │
+          │                   │                            └────────────┬─────────────┘
+          │                   │                                          ▼
+          │                   │                            ┌──────────────────────────┐
+          │                   │                            │   Event-driven backtest   │
+          │                   │                            │   + double-entry ledger   │
+          │                   │                            │   Σdebits == Σcredits     │
+          │                   │                            └────────────┬─────────────┘
+          ▼                   ▼                                          │
+   ┌───────────────────────────────────────────┐                       │
+   │  Audit framework  (fail-fast guardrails)   │                       │
+   │  look-ahead · temporal · survivorship ·    │                       │
+   │  feature-completeness · signal-collapse    │                       │
+   └───────────────────────────────────────────┘                       │
+                                                                         ▼
+   ┌──────────────────────────────────────────────────────────────────────────────┐
+   │  RAG Research Assistant   (vnquant ask)                                         │
+   │                                                                                 │
+   │   methodology notes ─┐                                                          │
+   │   live run-facts  ───┼─▶ chunk ─▶ embed ─▶ vector store ─▶ retrieve top-k ──┐   │
+   │   (FDR, IC, risk,    │   (offline hashing / OpenAI)                          │   │
+   │    audit, backtest)  ┘                                                       ▼   │
+   │                                                  ┌──────────────────────────────┐│
+   │   user question ────────────────────────────────▶  Hallucination guard          ││
+   │                                                  │  semantic floor  AND          ││
+   │                                                  │  lexical overlap  ──▶ ANSWER  ││
+   │                                                  │            else   ──▶ ABSTAIN ││
+   │                                                  └──────────────────────────────┘│
+   └──────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Reading the flow:** data → alpha → risk → portfolio → execution → backtest is the
+research-to-PnL spine. The **audit framework** watches the data feeding alpha and the
+backtest (a CRITICAL finding blocks promotion). The **RAG assistant** closes the loop:
+it ingests the methodology *and the live numbers this run produced*, then answers only
+what its retrieved context supports.
+
+---
+
 ## Framework
 
 The engine is organized as a set of independent stages, each in its own subpackage.
