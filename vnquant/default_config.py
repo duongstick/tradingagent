@@ -60,12 +60,38 @@ class BacktestConfig:
 
 
 @dataclass
+class AssistantConfig:
+    """Retrieval-augmented research assistant (RAG over pipeline output + methodology).
+
+    Defaults run fully OFFLINE and deterministic — a hashing embedder plus an extractive,
+    grounded generator — so the showcase needs no API keys, exactly like the rest of the
+    engine. Set ``backend='openai'`` (and OPENAI_API_KEY) to swap in real embeddings and
+    an LLM generator; the retrieval/grounding contract is identical either way.
+    """
+
+    backend: str = "offline"      # "offline" | "openai"
+    embed_dim: int = 1024         # hashing-embedder dimensionality (offline backend)
+    chunk_size: int = 90          # words per chunk
+    chunk_overlap: int = 20       # words of overlap between adjacent chunks
+    top_k: int = 4                # passages retrieved per query
+    min_score: float = 0.05       # cosine floor; below this a passage is irrelevant
+    # Hallucination guard: answer only if the top passage clears this cosine floor AND
+    # shares at least ``min_term_overlap`` content terms with the query. The lexical gate
+    # is what reliably rejects off-topic questions, since hashing-cosine alone is noisy.
+    abstain_threshold: float = 0.05
+    min_term_overlap: int = 1
+    openai_embed_model: str = "text-embedding-3-small"
+    openai_chat_model: str = "gpt-4o-mini"
+
+
+@dataclass
 class Config:
     data: DataConfig = field(default_factory=DataConfig)
     alpha: AlphaConfig = field(default_factory=AlphaConfig)
     risk: RiskConfig = field(default_factory=RiskConfig)
     execution: ExecutionConfig = field(default_factory=ExecutionConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
+    assistant: AssistantConfig = field(default_factory=AssistantConfig)
 
 
 DEFAULT_CONFIG = Config()
